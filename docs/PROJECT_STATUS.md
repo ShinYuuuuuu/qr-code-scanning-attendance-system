@@ -40,4 +40,6 @@ Phase 7 adds Prisma migration `0006_phase7_release_hardening` for attendance clo
 
 ## Next step
 
+Supabase project `qr-school-attendance` (`jtdznmjjymodsckhilae`, region `ap-southeast-1`) has been provisioned. Migrations 0001-0007 are applied, and Row Level Security is enabled on all 15 application tables with default-deny behavior. Policies must be added with the Supabase Auth integration.
+
 Next, wire the runtime repository to Prisma/PostgreSQL, resolve D-001–D-008, and run `docs/PILOT_TEST.md` on two real devices before production approval.

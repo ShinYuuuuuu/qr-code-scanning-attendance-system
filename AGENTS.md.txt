@@ -1,0 +1,56 @@
+# AGENTS.md — QR-Based School Event Attendance Management System
+
+## Project purpose
+
+Build a production-quality, offline-capable QR attendance system for school events. The source specification is `docs/architecture.md`. If a requirement conflicts with that document, stop and report the conflict before implementing.
+
+## Non-negotiable domain rules
+
+- The official student masterlist is the source of student information.
+- QR codes contain only an opaque, unique system token or identifier—never student names or other personal data.
+- A single event can span multiple event days.
+- Each event day can contain multiple attendance sessions.
+- Scanner Officer permission is event-specific, never a permanent global role.
+- Scanner Officers can only access their assigned events and permitted sessions.
+- Attendance scanning must work without internet after the device receives a valid offline event pack.
+- Each scanner device maintains local data and a durable sync queue.
+- PostgreSQL is the final source of truth.
+- Attendance duplicates must be prevented by the server, including duplicates originating from different devices.
+- The original successful attendance record is preserved; a rejected duplicate must be explained to the scanner.
+- Never make authorization decisions solely in the browser.
+- Do not store secrets, API keys, passwords, or real student data in Git.
+
+## Engineering workflow
+
+1. Read `docs/architecture.md`, `docs/decisions.md`, and this file before a substantial change.
+2. Inspect the existing implementation before editing.
+3. Work in the requested phase only. Do not begin a later phase without approval.
+4. Keep changes focused. Do not replace working code without a reason.
+5. Add or update tests with behavior changes.
+6. Run focused checks, then build checks, before reporting completion.
+7. Update `docs/decisions.md` when a design decision is finalized.
+8. Update `docs/acceptance-checklist.md` as requirements are verified.
+9. At the end of each phase, report: changed files, behavior delivered, tests run, risks, and the next recommended phase.
+
+## Required data and sync principles
+
+- Use a server-enforced unique constraint equivalent to: one student attendance per session.
+- Every locally created scan has a device-generated immutable idempotency key.
+- Sync operations must be retry-safe: resending the same local scan cannot create another attendance record.
+- Record both the device scan timestamp and the server receipt timestamp.
+- Make clock-skew handling visible in the implementation and documentation.
+- A device must not scan from stale, expired, revoked, or incomplete offline event data.
+- Do not delete failed sync records silently. Show their state and reason.
+
+## UI and MCP usage
+
+- Use 21st.dev MCP only when implementing visual components or layouts in the UI phase.
+- Search before generating a component from scratch, then adapt the selected component to the project’s design system and accessibility needs.
+- Do not copy a component blindly or let it dictate application architecture.
+- Keep the scanner screen fast, mobile-first, high-contrast, and usable with one hand.
+- Use the available spreadsheet workflow for masterlist import/export work when available.
+- Use the available UI/UX workflow for interface design and accessibility work when available.
+
+## Completion standard
+
+A feature is complete only when it has a working user-visible path, appropriate authorization, automated verification where practical, and documented limitations. Do not claim offline, sync, QR, or report functionality is complete without demonstrating it in tests or a reproducible manual scenario.

@@ -1,0 +1,243 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SYSTEM_ADMINISTRATOR
+  EVENT_COORDINATOR
+  SCANNER_OFFICER
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+  CANCELLED
+}
+
+enum SessionType {
+  TIME_IN
+  TIME_OUT
+  CUSTOM
+}
+
+enum QrCredentialStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum SyncAttemptStatus {
+  ACCEPTED
+  REJECTED
+}
+
+model User {
+  id                  String              @id @default(uuid())
+  email               String              @unique
+  displayName         String
+  passwordHash        String
+  role                UserRole
+  status              UserStatus          @default(ACTIVE)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  createdEvents       Event[]             @relation("EventCreator")
+  scannerAssignments  ScannerAssignment[]
+}
+
+model Student {
+  id            String               @id @default(uuid())
+  studentId     String               @unique
+  name          String
+  yearLevel     String
+  course        String?
+  section       String?
+  qrCredentials StudentQrCredential[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+}
+
+model StudentQrCredential {
+  id                    String             @id @default(uuid())
+  studentId             String
+  student               Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  token                 String             @unique
+  status                QrCredentialStatus @default(ACTIVE)
+  createdAt             DateTime           @default(now())
+  revokedAt             DateTime?
+  replacedByCredentialId String?
+
+  @@index([studentId, status])
+}
+
+model OfflineEventPack {
+  id          String   @id @default(uuid())
+  eventId     String
+  userId      String
+  packVersion String
+  issuedAt    DateTime @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+
+  @@index([eventId, userId, expiresAt])
+}
+
+model ScannerDevice {
+  id         String    @id
+  userId     String
+  registeredAt DateTime @default(now())
+  revokedAt  DateTime?
+
+  @@index([userId, revokedAt])
+}
+
+model AttendanceRecord {
+  id              String   @id @default(uuid())
+  idempotencyKey  String   @unique
+  deviceId        String
+  userId          String
+  eventId         String
+  sessionId       String
+  studentId       String
+  qrCredentialId  String
+  scannedAtDevice DateTime
+  receivedAtServer DateTime @default(now())
+  clockSkewSeconds Int
+  createdAt       DateTime @default(now())
+
+  @@unique([sessionId, studentId])
+  @@index([eventId, sessionId])
+  @@index([deviceId, scannedAtDevice])
+}
+
+model SyncAttempt {
+  id              String            @id @default(uuid())
+  idempotencyKey  String            @unique
+  deviceId        String
+  userId          String
+  eventId         String
+  sessionId       String
+  qrTokenHash     String
+  status          SyncAttemptStatus
+  reason          String?
+  message         String
+  scannedAtDevice DateTime
+  receivedAtServer DateTime         @default(now())
+
+  @@index([deviceId, receivedAtServer])
+  @@index([eventId, sessionId, status])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  actorUserId String?
+  targetType  String
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+}
+
+model MasterlistImport {
+  id          String               @id @default(uuid())
+  filename    String
+  createdById String
+  createdAt   DateTime             @default(now())
+  rows        MasterlistImportRow[]
+}
+
+model MasterlistImportRow {
+  id         String          @id @default(uuid())
+  importId   String
+  import     MasterlistImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  rowNumber  Int
+  studentId  String?
+  name       String?
+  yearLevel  String?
+  errors     Json?
+
+  @@index([importId, rowNumber])
+}
+
+model Event {
+  id                  String              @id @default(uuid())
+  name                String
+  description         String?
+  status              EventStatus         @default(DRAFT)
+  timezone            String?
+  createdById         String
+  createdBy           User                @relation("EventCreator", fields: [createdById], references: [id])
+  days               EventDay[]
+  scannerAssignments ScannerAssignment[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([createdById])
+}
+
+model EventDay {
+  id          String              @id @default(uuid())
+  eventId     String
+  event       Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  localDate   DateTime
+  sequence    Int
+  sessions    AttendanceSession[]
+  createdAt   DateTime            @default(now())
+
+  @@unique([eventId, localDate])
+  @@unique([eventId, sequence])
+}
+
+model AttendanceSession {
+  id                String              @id @default(uuid())
+  eventDayId        String
+  eventDay          EventDay            @relation(fields: [eventDayId], references: [id], onDelete: Cascade)
+  name              String
+  sessionType       SessionType
+  startsAt          DateTime
+  endsAt            DateTime
+  lateAfterMinutes  Int?
+  permittedBy       ScannerAssignmentSession[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@unique([eventDayId, name])
+  @@index([startsAt, endsAt])
+}
+
+model ScannerAssignment {
+  id          String                         @id @default(uuid())
+  eventId     String
+  event       Event                          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt  DateTime                       @default(now())
+  revokedAt   DateTime?
+  sessions    ScannerAssignmentSession[]
+
+  @@unique([eventId, userId])
+  @@index([userId, revokedAt])
+}
+
+model ScannerAssignmentSession {
+  assignmentId String
+  sessionId    String
+  assignment   ScannerAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  session      AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@id([assignmentId, sessionId])
+}
